@@ -112,10 +112,4 @@ class DetectorDataSplitter:
         self.create_yolo_yaml()
 
         print("Splitting completed.")
-
-if __name__ == "__main__":
-    source = '/home/kiterman/gradient/FliesDetector/project/data/label_studio'      
-    destination = '/home/kiterman/gradient/FliesDetector/project/data/detection'    
-    splitter = DetectorDataSplitter(source, destination)
-    splitter.run()
         
