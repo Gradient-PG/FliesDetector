@@ -30,7 +30,7 @@ class Classifier(ABC):
         }
     
     @abstractmethod
-    def inference(self, images: np.ndarray[Image.Image]) -> List[Tuple[str, float]]:
+    def inference(self, images: List[np.ndarray[Image.Image]]) -> List[Tuple[str, float]]:
         '''
         :param images: list of PIL.Images, each one is a cut image 
         :return: List[]
@@ -62,11 +62,14 @@ class ResnetClassifier(Classifier):
         self.model.eval()
         self.preprocess = self.weights.transforms()
     
-    def inference(self, images: np.ndarray[Image.Image]) -> List[Tuple[str, float]]:
+    def inference(self, images: List[np.ndarray[Image.Image]]) -> List[Tuple[str, float]]:
         # result = [(class, conf), ...] 
         results = []
         for idx, full_image in enumerate(images):
             result_per_image = []
+            # Check if there are any cut images taken from an image, if not then skip to next image
+            if full_image.shape[0] == 0:
+                continue
             input = torch.as_tensor(full_image)
             input = input.to(self.device)
             output = self.model(input).squeeze(0).softmax(0)
