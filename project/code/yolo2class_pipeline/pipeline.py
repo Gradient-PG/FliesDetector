@@ -1,4 +1,5 @@
 import os
+import argparse
 from typing import Optional, Tuple, List
 from abc import ABC, abstractmethod
 
@@ -22,12 +23,14 @@ class Pipeline(ABC):
     def __init__(self, 
                  yolo_threshold: Optional[float] = 0.25, 
                  classifier_threshold: Optional[float] = 0.5,
-                 resize_first: Optional[Tuple[int, int]] = (768, 768)):
+                 resize_first: Optional[Tuple[int, int]] = (768, 768),
+                 save_cut: Optional[bool] = False):
         '''
         :param yolo_threshold: float within <0;1> range that will determine the necessary confidence a model has to detect an object
         :param classifier_threshold: float within <0;1> range that will determine the necessary confidence a model has in 
         classification, if not met then the detected object will be descibed as Unsure
         :param resize_first: single integer or a tuple of two integers, identicates the size of the input image to be resized into
+        :param save_cut: True if you want to save cut bounding boxes from images
         '''
         self._PATH = os.path.join(os.getcwd(), 'project', 'code', 'yolo2class_pipeline')
         # If gpu is available use it for inference
@@ -39,7 +42,8 @@ class Pipeline(ABC):
             'images_path': os.path.join(self._PATH, 'images'),  # Path where all images should be saved
             'detection_threshold': yolo_threshold,
             'classifier_threshold': classifier_threshold,
-            'image_size': resize_first
+            'image_size': resize_first,
+            'save_cut': save_cut
         }
         # create output directory, if not exists
         os.makedirs(self.config['images_path'], exist_ok=True)
@@ -54,8 +58,12 @@ class Pipeline(ABC):
 
 
 class Yolo2ClassifierPipeline(Pipeline):
-    def __init__(self, yolo_threshold: Optional[float] = None, classifier_threshold: Optional[float] = None):
-        super().__init__(yolo_threshold, classifier_threshold)
+    def __init__(self, 
+                 yolo_threshold: Optional[float] = 0.25, 
+                 classifier_threshold: Optional[float] = 0.5,
+                 resize_first: Optional[Tuple[int, int]] = (768, 768),
+                 save_cut: Optional[bool] = False):
+        super().__init__(yolo_threshold, classifier_threshold, resize_first, save_cut)
         # DataPreparation (Resize, Normalize, ToTensor)
         self.data_preperation: DataPreparation = BasicDataPreparation()
         # Pretrained yolo model
@@ -63,8 +71,8 @@ class Yolo2ClassifierPipeline(Pipeline):
                          task='detect')
         self.yolo.to(self.device)
         self.yolo.eval()
-        # Class to cut all detections out of image, and transform them appropriately
-        self.image_cutter = ImageCutter()
+        # Class to cut all detections out of image, and transform them appropriately (optionally save)
+        self.image_cutter = ImageCutter(self.config['images_path']) if self.config['save_cut'] else ImageCutter()
         # Classifier to perform inference on cut images
         self.classifier: Classifier = ResnetClassifier(os.path.join(self.config['models_path'], 'classifier_weights.pt'), 
                                                        self.device,
@@ -87,8 +95,24 @@ class Yolo2ClassifierPipeline(Pipeline):
         # Join everything into one picture (image + bbox + label) + counter of labels
         self.aligner(images, detections, classifier_output)
 
+
+def main(input_images: List[str], input_yolo_threshold: float, input_classifier_threshold: float, input_save_cut: bool) -> None:
+    pipeline = Yolo2ClassifierPipeline(yolo_threshold=input_yolo_threshold, 
+                                       classifier_threshold=input_classifier_threshold,
+                                       save_cut=input_save_cut)
+    pipeline(input_images)
+
+# CLI
+# For further information execute
+# pipeline.py -h or pipeline.py --help
 if __name__ == '__main__':
-    pipeline = Yolo2ClassifierPipeline(yolo_threshold=0.28, classifier_threshold=0.5)
-    example_images = [os.path.join(os.getcwd(), 'project', 'data', 'label_studio', 'male-normal.female-normal', 'images', '3f8d5aaf-IMG_5278.jpg'),
-                      os.path.join(os.getcwd(), 'project', 'data', 'label_studio', 'male-normal.female-normal', 'images', '7d410af7-IMG_7023.jpg')]
-    pipeline(example_images)
+    parser = argparse.ArgumentParser(description="Run Yolo2Classifier pipeline on images")
+    
+    parser.add_argument("image_paths", type=str, nargs="+", help="List of image paths")
+    parser.add_argument("--yolo_threshold", type=float, default=0.25, help="Confidence threshold for yolo detector")
+    parser.add_argument("--classifier_threshold", type=float, default=0.5, help="Confidence threshold for classifier")
+    parser.add_argument("--save_cut", type=bool, default=False, help="True if cut bounding boxes should be saved")
+
+    args = parser.parse_args()
+
+    main(args.image_paths, args.yolo_threshold, args.classifier_threshold, args.save_cut)
