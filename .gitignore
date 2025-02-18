@@ -1,3 +1,5 @@
 nohup.out
 .ipynb_checkpoints/
 .jupyter_ystore.db
+*.pyc
+/project/code/yolo2class_pipeline/images/
