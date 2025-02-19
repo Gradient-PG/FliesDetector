@@ -26,11 +26,13 @@ FOLDER_MIMETYPE = 'application/vnd.google-apps.folder'
 
 def remove_duplicates_from_folder(folder_id):
     md5_dict = {}
+    subfolder_list = []
 
     file_list = drive.ListFile({'q': f"'{folder_id}' in parents and trashed=false"}).GetList()
 
     for file in file_list:
         if file['mimeType'] == FOLDER_MIMETYPE:
+            subfolder_list.append(file['id'])
             continue
 
         file_md5 = file.get('md5Checksum')
@@ -46,6 +48,9 @@ def remove_duplicates_from_folder(folder_id):
 
         else:
             md5_dict[file_md5] = file['id']
+
+    for subfolder_id in subfolder_list:
+        remove_duplicates_from_folder(subfolder_id)
 
 
 def convert_to_jpg(file_content, file_extension):
@@ -118,10 +123,6 @@ def process_folder(source_id, dest_id):
 
                 print(f"Created folder: {item['title']}")
 
-                # Process folder id est: delete duplicates from it
-                found_folder_id = item['id']
-                remove_duplicates_from_folder(found_folder_id)
-
             elif item['mimeType'].startswith('application/vnd.google-apps'):
                 # Avoid processing Google app docs, bcs they make errors
                 print(f"Skipping Google Document: {file['title']}")
@@ -168,6 +169,10 @@ def main():
 
     # Process source folder 
     process_folder(source_folder_id, dest_folder_id)
+
+    # At the end remove duplicates on folder level
+    # We have to do it afterwards, because there was some error with permissions for some files
+    remove_duplicates_from_folder(dest_folder_id)
 
 if __name__ == '__main__':
     main()

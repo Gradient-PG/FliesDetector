@@ -9,3 +9,7 @@ save_credentials_file: "drive_credentials.json"
 
 get_refresh_token: True
 
+oauth_scope: 
+  - https://www.googleapis.com/auth/drive.file
+  - https://www.googleapis.com/auth/drive.install
+  - https://www.googleapis.com/auth/drive
