@@ -1,7 +1,3 @@
-# TODO :
-#   - narazie ignoruje plec bo troche nie mam pomyslu jak to wtedy wykrywac, nie majac specjalnej labelki do tego
-#   Przy zmianie na uwzglednianie plci bedzie trzeba zmienic strukture folderu na "nazwa_gatunku + plec" dla kazdego folderu
-
 import argparse
 import os
 import shutil
@@ -39,11 +35,11 @@ class DatasetSplitter:
         # prepare folder structure to satisfy splitter
         # dataset
         #   |
-        #   |---samice_normal
+        #   |---class1
         #           - .jpg
         #           - .jpg
         #   |
-        #   |---samice_white
+        #   |---class2
         #           - .jpg
         #           - .jpg
         # Clear previous splits if they happened
