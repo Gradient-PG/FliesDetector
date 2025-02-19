@@ -3,3 +3,6 @@ nohup.out
 .jupyter_ystore.db
 *.pyc
 /project/code/yolo2class_pipeline/images/
+/project/data/classification/test/
+/project/data/classification/train/
+/project/data/classification/val/
