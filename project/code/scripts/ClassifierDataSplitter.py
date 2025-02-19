@@ -1,26 +1,32 @@
-# Wziac caly dataset i na kazdym przeprowadzic wycinanie + dodanie do csv
-# Stworzenie ze zdjec formatu jak w bibliotece
-# uzycie biblioteki 
-
 # TODO :
 #   - narazie ignoruje plec bo troche nie mam pomyslu jak to wtedy wykrywac, nie majac specjalnej labelki do tego
 #   Przy zmianie na uwzglednianie plci bedzie trzeba zmienic strukture folderu na "nazwa_gatunku + plec" dla kazdego folderu
 
+import argparse
 import os
 import shutil
 import json
-from PIL import Image
 import pandas as pd
 import numpy as np
+from PIL import Image
+from typing import List, Tuple
+
 import splitfolders
 
 class DatasetSplitter:
     '''
     Splits whole dataset into train, test, val sets equally for each group
     '''
-    def __init__(self, data_directory: str):
+    def __init__(self, data_directory: str, ratio: Tuple[float] = (0.8, 0.1, 0.1), seed: int = 42):
+        '''
+        :param data_directory: path to the input folder (data folder to be split)
+        :param ratio: Tuple of sizes each split should be (train, val, test)
+        :param seed: Seed used for random generation of data splits
+        '''
         cwd = os.getcwd()
         data_path = os.path.join(cwd, 'project', 'data')
+        self.ratio = ratio
+        self.seed = seed
         self.PATHS = {
             'orig_data_path': data_directory,
             'cut_image_path': os.path.join(data_path, 'classification', 'temp'),
@@ -114,12 +120,30 @@ class DatasetSplitter:
                 # Cut bboxes and save them
                 self.process_image(image_path, ann_path, path)
         # Split prepared dataset
-        splitfolders.ratio(self.PATHS['cut_image_path'], output=self.PATHS['final_dataset_path'], seed=42, ratio=(.8, .1, .1), group_prefix=None, move=True)
+        splitfolders.ratio(self.PATHS['cut_image_path'], output=self.PATHS['final_dataset_path'], seed=self.seed, ratio=self.ratio, group_prefix=None, move=True)
         # Create .csv files for each split
         self.create_csv(self.PATHS['final_dataset_path'])
         # Delete redundant directory
         shutil.rmtree(self.PATHS['cut_image_path'])
 
-        
-dataset_path = os.path.join(os.getcwd(), 'project', 'data', 'label_studio')
-DatasetSplitter(dataset_path)()
+
+def main(folder_path: str, ratio: List[float], seed: int) -> None:
+    # dataset_path = os.path.join(os.getcwd(), 'project', 'data', 'label_studio')
+    # DatasetSplitter(dataset_path)()
+    DatasetSplitter(folder_path, tuple(ratio), seed)()
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="""
+                                     Dataset Splitter for Classification purposes, splits data into\n
+                                     parts specified in ratio argument
+                                    """)
+    
+    parser.add_argument("--image_dir", type=str, help="Directory of the folder with data to be split (this folder should be a set of smaller folders)")
+    parser.add_argument("--ratio", type=float, nargs="+", default=[0.8, 0.1, 0.1] , help="How dataset should be split training_ratio val_ratio test_ratio")
+    parser.add_argument("--seed", type=int, default=42, help="Seed used for randomly splitting data")
+
+    args = parser.parse_args()
+
+    main(args.image_dir, args.ratio, args.seed)
+    
