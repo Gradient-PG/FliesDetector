@@ -6,7 +6,14 @@ import argparse
 from typing import List, Tuple, Optional
 
 class DetectorDataSplitter:
+    '''
+    Splits dataset into training, test, validation sets
+    '''
     def __init__(self, source_path: str, destination_path: str):
+        '''
+        :param source_path: path pointing to input data directory
+        :param destination_path: path for splitted data
+        '''
         self.source_dir = source_path
         self.dest_dir = destination_path
 
@@ -61,6 +68,13 @@ class DetectorDataSplitter:
 
     
     def split_files(self, train_part: float, test_part: float, val_part: float, seed: int) -> None:
+        '''
+        Split all data into parts
+        :param train_part: (0,1) float number representing portion of data to be in training split
+        :param test_part: (0,1) float number representing portion of data to be in testing split
+        :param val_part: (0,1) float number representing portion of data to be in validation split
+        :param seed: int number to keep randomness 
+        '''
         random.seed(seed)
         # Randomly distribute file pairs in the list so that every split is different
         random.shuffle(self.file_pairs_list)
@@ -79,11 +93,21 @@ class DetectorDataSplitter:
         self.val_files = self.file_pairs_list[train_count+test_count:train_count+test_count+val_count]
 
     def copy_files(self, file_pairs: Tuple[str, str], dest_img: str, dest_lbl: str) -> None:
+        '''
+        Copy specified files (train, val or test) to their destination directory
+        :param file_pairs: (image_path, label_path)
+        :param dest_img: destination path for image to be copied to
+        :param dest_lbl: destination path for label to be copied to
+        '''
         for img, lbl in file_pairs:
             shutil.copy(img, dest_img)
             shutil.copy(lbl, dest_lbl)
 
     def create_yolo_yaml(self, filename: Optional[str] = 'detection_set.yaml') -> None:
+        '''
+        Create .yaml file for yolo training
+        :param filename: desired name of the .yaml file
+        '''
         classes = ['fly']
 
         self.yaml_content = {
@@ -107,6 +131,12 @@ class DetectorDataSplitter:
             test_part: Optional[float] = 0.1, 
             val_part: Optional[float] = 0.1,
             seed: Optional[int] = 42) -> None:
+        '''
+        This function is running whole pipeline for splitting data accordingly to rules
+        :param train_part: float representing how much data should be in train split
+        :param test_part: float representing how much data should be in test split
+        :param val_part: float representing how much data should be in val split
+        '''
         self.create_dirs()
         self.collect_file_pairs()
         self.split_files(train_part, test_part, val_part, seed)
@@ -123,6 +153,8 @@ def main(folder_path: str, ratio: List[float], seed: int) -> None:
     DetectorDataSplitter(folder_path, os.path.join(os.getcwd(), 'project', 'data', 'detection')).run(*ratio, seed)
 
 
+# For more info
+# python DetectorDataSplitter.py -h / --help
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="""
                                      Dataset Splitter for Detection/YOLO purposes, splits data into\n
