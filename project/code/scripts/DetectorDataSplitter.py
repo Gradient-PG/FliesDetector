@@ -92,6 +92,24 @@ class DetectorDataSplitter:
         self.test_files = self.file_pairs_list[train_count:train_count+test_count]
         self.val_files = self.file_pairs_list[train_count+test_count:train_count+test_count+val_count]
 
+    def change_class_label(self, label_path: str) -> None:
+        '''
+        This function opens label file and changes all class indexes to 0 (detector is only meant to detect objects, ignoring their classes)
+        :param label_path: path to the label file, where the replacing should happen
+        '''
+        # Open file
+        with open(label_path, mode='r+') as file:
+            # Take all lines from file
+            lines = file.readlines()
+            # Clear file
+            file.truncate(0)
+            # Set writing to the beginning
+            file.seek(0)
+            # replace only the first number (class_id) in every line with 0
+            lines_changed = [line.replace(line[0], '0', 1) for line in lines]
+            # write contents to file
+            file.writelines(lines_changed)
+
     def copy_files(self, file_pairs: Tuple[str, str], dest_img: str, dest_lbl: str) -> None:
         '''
         Copy specified files (train, val or test) to their destination directory
@@ -102,6 +120,7 @@ class DetectorDataSplitter:
         for img, lbl in file_pairs:
             shutil.copy(img, dest_img)
             shutil.copy(lbl, dest_lbl)
+            self.change_class_label(os.path.join(dest_lbl, lbl.split('/')[-1]))
 
     def create_yolo_yaml(self, filename: Optional[str] = 'detection_set.yaml') -> None:
         '''
