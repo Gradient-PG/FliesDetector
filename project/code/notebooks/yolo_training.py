@@ -6,7 +6,7 @@ import torch
 
 
 # Step 1: Creating a ClearML Task
-task = Task.init(project_name="my_project", task_name="yolo11n_test")
+task = Task.init(project_name="Muszki", task_name="Detection")
 
 # Step 2: Selecting the YOLO11 Model
 model_variant = "yolo11n"
