@@ -4,7 +4,7 @@ services:
   label-studio:
     image: heartexlabs/label-studio:latest
     container_name: label-studio
-    user: "${UID}:${GID}" # permissions to volume
+    user: "${UID}:1014" # permissions to volume (1014 is flies group)
     networks:
       - external
     environment:
