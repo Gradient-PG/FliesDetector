@@ -1,9 +1,28 @@
 version: "3.8"
 
 services:
+  label-studio:
+    image: heartexlabs/label-studio:latest
+    container_name: label-studio
+    user: "${UID}:${GID}" # permissions to volume
+    networks:
+      - external
+    environment:
+      - LABEL_STUDIO_DISABLE_SIGNUP_WITHOUT_LINK=true
+      - LABEL_STUDIO_USERNAME=labelki@gradient.pl
+      - LABEL_STUDIO_PASSWORD=$LABEL_STUDIO_PASSWORD
+      - LABEL_STUDIO_USER_TOKEN=$LABEL_STUDIO_API_KEY
+    volumes:
+      - ~/label-studio-data:/label-studio/data:rw
+    restart: always
+    ports:
+      - "8082:8080" # 8080 is busy
+
   yolo:
     container_name: yolo
     image: humansignal/yolo:v0
+    networks:
+      - external
     build:
       context: .
       args:
@@ -29,7 +48,7 @@ services:
       # Use prefix 'http://' or 'https://' for the URL always.
       # Determine the actual IP using 'ifconfig' (Linux/Mac) or 'ipconfig' (Windows).
       # or you can try http://host.docker.internal:<label-studio-port> if you run LS on the same machine
-      - LABEL_STUDIO_URL=$LABEL_STUDIO_URL
+      - LABEL_STUDIO_URL=http://label-studio:8080/
       - LABEL_STUDIO_API_KEY=$LABEL_STUDIO_API_KEY
 
       # YOLO parameters
@@ -49,3 +68,7 @@ services:
       - "./data/server:/data"
       - "./models:/app/models"
       - "./cache_dir:/app/cache_dir"
+
+networks:
+  external:
+    driver: bridge
