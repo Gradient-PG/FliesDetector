@@ -135,7 +135,8 @@ class DetectorDataSplitter:
             'val':'images/val',
             'test':'images/test',
             'nc': len(classes),
-            'names': classes
+            'names': classes,
+            'path': self.dest_dir
         }
 
         # Create .yaml file in specified directory
