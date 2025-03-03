@@ -21,7 +21,7 @@ services:
       - ~/preannotated-dataset:/preannotated-dataset:rw
     restart: always
     ports:
-      - "8082:8080" # 8080 is busy
+      - "8082:8080" # 8080 is being used
 
   yolo:
     container_name: yolo
