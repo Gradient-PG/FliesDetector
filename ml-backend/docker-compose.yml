@@ -12,8 +12,13 @@ services:
       - LABEL_STUDIO_USERNAME=labelki@gradient.pl
       - LABEL_STUDIO_PASSWORD=$LABEL_STUDIO_PASSWORD
       - LABEL_STUDIO_USER_TOKEN=$LABEL_STUDIO_API_KEY
+      # if you need to import preannotated dataset to label studio - https://labelstud.io/blog/tutorial-importing-local-yolo-pre-annotated-images-to-label-studio/
+      - LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED=true
+      - LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=$SOURCE_DATASET_DIRECTORY
+      - CSRF_TRUSTED_ORIGINS=$CSRF_TRUSTED_ORIGINS
     volumes:
       - ~/label-studio-data:/label-studio/data:rw
+      - ~/preannotated-dataset:/preannotated-dataset:rw
     restart: always
     ports:
       - "8082:8080" # 8080 is busy
