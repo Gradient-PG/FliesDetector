@@ -1,5 +1,7 @@
 import argparse
 import requests
+import os
+import zipfile
 from PIL import Image
 
 from label_studio_sdk.client import LabelStudio
@@ -11,7 +13,7 @@ from clearml.automation.controller import PipelineDecorator
 
 def download_data(label_studio_url, api_key, export_type):
     '''
-    Download data from label studio
+    Download data from label-studio
     '''
 
     # Get projects using label_studio_sdk
@@ -27,9 +29,13 @@ def download_data(label_studio_url, api_key, export_type):
             response = requests.get(url, headers=headers)
             if response.status_code != 200:
                 raise Exception
-            # TODO it only works for formats which return zip 
+            # TODO it only works for formats which return zip
+            # Download, extract and remove zip file
             with open(f'{project.id}.zip', 'wb') as f:
                 f.write(response.content)
+            with zipfile.ZipFile(f'{project.id}.zip', 'r') as zip_file:
+                zip_file.extractall(f'{project.id}')
+            os.remove(f'{project.id}.zip')
         except Exception:
             print(f'Downloading project with id={project.id} failed.')
 
