@@ -1,35 +1,77 @@
-from clearml import Task
-
+from clearml import Task, Dataset
 from ultralytics import YOLO
 import os
 import torch
+import yaml  
 
+def train_segmentator(
+    dataset_id: str,
+    project_name: str = "Muszki",
+    task_name: str = "Detection",
+    model_variant: str = "yolo11n",
+    epochs: int = 32,
+    batch_size: int = 8
+):
+    """Training function integrating ClearML with YOLO"""
+    try:
+        # Creating a ClearML Task
+        task = Task.init(project_name=project_name, task_name=task_name)
+        
+        # Loading dataset from ClearML
+        dataset = Dataset.get(dataset_id=dataset_id)
+        dataset_path = dataset.get_local_copy()
+        
+        # Generating a dynamic YAML file
+        yaml_config = {
+            'names': ['fly'], 
+            'nc': 1,           
+            'path': dataset_path,
+            'train': 'train', 
+            'val': 'val',
+            'test': 'test'      
+        }
 
-# Step 1: Creating a ClearML Task
-task = Task.init(project_name="Muszki", task_name="Detection")
+        # Save YAML file
+        yaml_path = os.path.join(dataset_path, 'detection_set.yaml')
+        with open(yaml_path, 'w') as f:
+            yaml.dump(yaml_config, f, default_flow_style=False)  
+        
+        # Setting Up Training Arguments
+        task.set_parameters({
+            "model_variant": model_variant,
+            "epochs": epochs,
+            "batch_size": batch_size,
+            "dataset_id": dataset_id,
+            "dataset_path": dataset_path,
+            "yaml_path": yaml_path
+        })
 
-# Step 2: Selecting the YOLO11 Model
-model_variant = "yolo11n"
-task.set_parameter("model_variant", model_variant)
+        # Loading Model
+        model = YOLO(f"{model_variant}.pt")
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        model.to(device)
 
-# Step 3: Loading the YOLO11 Model
-model = YOLO(f"{model_variant}.pt")
+        # Trening
+        results = model.train(
+            data=yaml_path,
+            epochs=epochs,
+            batch=batch_size,
+            device=device.index if device.type == 'cuda' else 'cpu'
+        )
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-model.to(device)
+        # Validation
+        model.val(data=yaml_path, save_json=True)
+        
+        return results
 
-# Step 4: Setting Up Training Arguments
-path_to_detection_yaml = os.path.join(os.getcwd(), 'project', 'data', 'detection', 'detection_set.yaml')
-args = dict(
-    data=path_to_detection_yaml, 
-    epochs=32, 
-    batch=8)
-task.connect(args)
+    except Exception as e:
+        print(f"Błąd podczas treningu: {str(e)}")
+        raise
 
-# Step 5: Initiating Model Training
-results = model.train(**args)
-
-print(results)
-
-# model.eval()
-model.val(data=path_to_detection_yaml, save_json=True)
+if __name__ == "__main__":
+    train_segmentator(
+        dataset_id="ab637d3b70144a949f68dac5baac4d0f",  
+        model_variant="yolo11n",
+        epochs=32,
+        batch_size=8
+    )
