@@ -64,6 +64,17 @@ class ResnetClassifier(Classifier):
     
     def inference(self, images: List[np.ndarray[Image.Image]]) -> List[Tuple[str, float]]:
         # result = [(class, conf), ...] 
+        # from PIL import Image
+        # from transformers import pipeline
+
+        # classifier = pipeline(
+        #     "image-classification",
+        #     model="./image_classification_model",
+        #     feature_extractor="./image_classification_feature_extractor"
+        # )
+
+        # image = Image.open("your_image.jpg")
+        # predictions = classifier(image)
         results = []
         for idx, full_image in enumerate(images):
             result_per_image = []
