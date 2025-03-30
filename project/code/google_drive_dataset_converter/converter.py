@@ -23,6 +23,7 @@ def parse_args():
     parser.add_argument('--source-id', required=True, type=str, help='Google Drive source folder ID')
     parser.add_argument('--output-dir', default='dataset', type=str, help='Output directory (default: dataset)')
     parser.add_argument('--last-date', type=str, help='Only process files created after this date (DD-MM-YYYY)')
+    parser.add_argument('--dest-id', type=str, help='Destination folder ID in Google Drive (enables cloud save)')
     return parser.parse_args()
 
 def init_drive():
@@ -41,18 +42,63 @@ def convert_to_jpg(file_path):
 
         print(f"Converted: {os.path.basename(file_path)} -> {os.path.basename(new_path)}")
         os.remove(file_path)
+        return new_path
     except Exception as e:
         print(f"Error converting {os.path.basename(file_path)}: {str(e)}")
         if os.path.exists(file_path):
             os.remove(file_path)
+        return None
 
-def converter_worker(file_q):
+def converter_worker(file_q, upload_q=None):
     while True:
         file_path = file_q.get()
         if file_path == "STOP":
             break
-        convert_to_jpg(file_path)
+        
+        converted_path = convert_to_jpg(file_path)
+        if upload_q is not None and converted_path:
+            upload_q.put(converted_path)
+            
         file_q.task_done()
+
+def uploader_worker(drive, dest_id, upload_q):
+    while True:
+        file_path = upload_q.get()
+        if file_path == "STOP":
+            break
+        
+        try:
+            date_dir = os.path.basename(os.path.dirname(file_path))
+            file_name = os.path.basename(file_path)
+            
+            # Find or create date folder
+            query = f"'{dest_id}' in parents and title='{date_dir}' and mimeType='{DIR_MIME}' and trashed=false"
+            date_folders = drive.ListFile({'q': query}).GetList()
+            
+            if not date_folders:
+                date_folder = drive.CreateFile({
+                    'title': date_dir,
+                    'mimeType': DIR_MIME,
+                    'parents': [{'id': dest_id}]
+                })
+                date_folder.Upload()
+                print(f"Created remote folder: {date_dir}")
+            else:
+                date_folder = date_folders[0]
+            
+            # Upload file
+            remote_file = drive.CreateFile({
+                'title': file_name,
+                'parents': [{'id': date_folder['id']}]
+            })
+            remote_file.SetContentFile(file_path)
+            remote_file.Upload()
+            print(f"Uploaded: {file_name} to {date_dir}")
+            
+        except Exception as e:
+            print(f"Error uploading {file_path}: {str(e)}")
+        
+        upload_q.task_done()
 
 def parse_date(date_str):
     return datetime.strptime(date_str, "%d-%m-%Y")
@@ -104,13 +150,33 @@ def main():
             sys.exit(1)
 
     file_q = queue.Queue()
-    converter_thread = threading.Thread(target=converter_worker, args=(file_q,), daemon=True)
+    upload_q = queue.Queue() if args.dest_id else None
+    
+    converter_thread = threading.Thread(
+        target=converter_worker, 
+        args=(file_q, upload_q),
+        daemon=True
+    )
     converter_thread.start()
-
+    
     try:
         drive = init_drive()
+
+        upload_thread = None
+
+        if args.dest_id:
+            upload_thread = threading.Thread(
+                target=uploader_worker,
+                args=(drive, args.dest_id, upload_q),
+                daemon=True
+            )
+            upload_thread.start()
+        
         print(f"Downloading from Google Drive folder ID: {args.source_id}")
         print(f"Saving to: {args.output_dir}")
+        if args.dest_id:
+            print(f"Cloud save enabled, uploading to folder ID: {args.dest_id}")
+        
         download_dir(drive, args.source_id, args.output_dir, file_q, last_date_filter)
     except Exception as e:
         print(f"Error: {str(e)}", file=sys.stderr)
@@ -118,6 +184,11 @@ def main():
     finally:
         file_q.put("STOP")
         converter_thread.join()
+        
+        if args.dest_id:
+            upload_q.put("STOP")
+            upload_thread.join()
+        
         print("\nAll files processed")
 
 if __name__ == "__main__":
