@@ -3,3 +3,5 @@ nohup.out
 .jupyter_ystore.db
 *.pyc
 /project/code/yolo2class_pipeline/images/
+/project/code/googledrive_converter/settings.yaml
+/project/code/googledrive_converter/drive_credentials.yaml
