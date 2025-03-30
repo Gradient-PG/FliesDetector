@@ -19,7 +19,7 @@ PHOTO_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.heic', '.heif', '.bmp', '
 DIR_MIME = 'application/vnd.google-apps.folder'
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Download and convert Google Drive photos')
+    parser = argparse.ArgumentParser(description='Download and convert to .jpg (optionally upload again) Google Drive photos')
     parser.add_argument('--source-id', required=True, type=str, help='Google Drive source folder ID')
     parser.add_argument('--output-dir', default='dataset', type=str, help='Output directory (default: dataset)')
     parser.add_argument('--last-date', type=str, help='Only process files created after this date (DD-MM-YYYY)')
