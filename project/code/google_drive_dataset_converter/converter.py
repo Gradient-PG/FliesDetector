@@ -20,8 +20,9 @@ DIR_MIME = 'application/vnd.google-apps.folder'
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Download and convert Google Drive photos')
-    parser.add_argument('--source-id', required=True, help='Google Drive source folder ID')
-    parser.add_argument('--output-dir', default='dataset', help='Output directory (default: dataset)')
+    parser.add_argument('--source-id', required=True, type=str, help='Google Drive source folder ID')
+    parser.add_argument('--output-dir', default='dataset', type=str, help='Output directory (default: dataset)')
+    parser.add_argument('--last-date', type=str, help='Only process files created after this date (DD-MM-YYYY)')
     return parser.parse_args()
 
 def init_drive():
@@ -53,20 +54,30 @@ def converter_worker(file_q):
         convert_to_jpg(file_path)
         file_q.task_done()
 
+def parse_date(date_str):
+    return datetime.strptime(date_str, "%d-%m-%Y")
+
 def get_date_dir_name(item):
-    modified_date = item['modifiedDate']
-    dt = datetime.strptime(modified_date, "%Y-%m-%dT%H:%M:%S.%fZ")
+    created_date = item['createdDate']
+    dt = datetime.strptime(created_date, "%Y-%m-%dT%H:%M:%S.%fZ")
     return dt.strftime("%d-%m-%Y")
 
-def download_dir(drive, source_dir_id, local_dir, file_q):
+def should_process_file(item, last_date_filter=None):
+    if not last_date_filter:
+        return True
+    
+    created_date = datetime.strptime(item['createdDate'], "%Y-%m-%dT%H:%M:%S.%fZ")
+    return created_date > last_date_filter
+
+def download_dir(drive, source_dir_id, local_dir, file_q, last_date_filter=None):
     file_list = drive.ListFile({'q': f"'{source_dir_id}' in parents and trashed=false"}).GetList()
     
     for item in file_list:
         if item['mimeType'] == DIR_MIME:
-            download_dir(drive, item['id'], local_dir, file_q)
+            download_dir(drive, item['id'], local_dir, file_q, last_date_filter)
         else:
             file_ext = os.path.splitext(item['title'])[1].lower()
-            if file_ext in PHOTO_EXTENSIONS:
+            if file_ext in PHOTO_EXTENSIONS and should_process_file(item, last_date_filter):
                 date_dir = get_date_dir_name(item)
                 target_dir = os.path.join(local_dir, date_dir)
                 os.makedirs(target_dir, exist_ok=True)
@@ -82,8 +93,17 @@ def download_dir(drive, source_dir_id, local_dir, file_q):
 
 def main():
     args = parse_args()
-    file_q = queue.Queue()
     
+    last_date_filter = None
+    if args.last_date:
+        try:
+            last_date_filter = parse_date(args.last_date)
+            print(f"Processing files created after: {last_date_filter.strftime('%d-%m-%Y')}")
+        except ValueError:
+            print("Invalid date format. Please use DD-MM-YYYY", file=sys.stderr)
+            sys.exit(1)
+
+    file_q = queue.Queue()
     converter_thread = threading.Thread(target=converter_worker, args=(file_q,), daemon=True)
     converter_thread.start()
 
@@ -91,7 +111,7 @@ def main():
         drive = init_drive()
         print(f"Downloading from Google Drive folder ID: {args.source_id}")
         print(f"Saving to: {args.output_dir}")
-        download_dir(drive, args.source_id, args.output_dir, file_q)
+        download_dir(drive, args.source_id, args.output_dir, file_q, last_date_filter)
     except Exception as e:
         print(f"Error: {str(e)}", file=sys.stderr)
         sys.exit(1)
