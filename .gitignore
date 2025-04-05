@@ -2,11 +2,9 @@ nohup.out
 .ipynb_checkpoints/
 .jupyter_ystore.db
 *.pyc
-<<<<<<< HEAD
 /project/code/yolo2class_pipeline/images/
 /project/code/google_drive_dataset_converter/client_secrets.json
 /project/code/google_drive_dataset_converter/drive_credentials.json
-=======
 yolov11n
 /project/code/yolo2class_pipeline/images/
 /project/data/classification/test/
@@ -19,4 +17,4 @@ ml-backend/.env
 ml-backend/cache*
 ml-backend/data
 ml-backend/models/*
->>>>>>> main
+project/code/yolo2class_pipeline/models/classificator
