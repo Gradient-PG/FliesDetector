@@ -100,11 +100,16 @@ preprocessed_dataset = dataset.map(
     remove_columns=dataset["train"].column_names  # Remove raw images to save memory
 )
 
-# Load model
+# Load model with correct number of labels and update the config
 model = AutoModelForImageClassification.from_pretrained(
     model_checkpoint,
+    num_labels=num_labels,
     ignore_mismatched_sizes=True  # In case you're changing number of classes
 )
+
+# Update the classification head dictionaries
+model.config.id2label = {i: label for i, label in enumerate(labels)}
+model.config.label2id = {label: i for i, label in enumerate(labels)}
 
 # Training configuration
 training_args = TrainingArguments(
@@ -112,12 +117,10 @@ training_args = TrainingArguments(
     evaluation_strategy="epoch",
     per_device_train_batch_size=32,
     per_device_eval_batch_size=32,
-    num_train_epochs=10,
-    learning_rate=5e-4,  # Increased learning rate
-    warmup_steps=500,  # Added warmup
-    logging_steps=10,
+    num_train_epochs=3,
+    learning_rate=1e-2,
     remove_unused_columns=False,
-    fp16=False,  # Disabled mixed precision for debugging
+    fp16=False,
     dataloader_num_workers=4,
     gradient_accumulation_steps=1,
     weight_decay=0.01,
@@ -172,8 +175,8 @@ eval_results = trainer.evaluate()
 print(f"Final evaluation results: {eval_results}")
 
 # Save model and feature extractor
-model.save_pretrained(f"{MODEL_OUTPUT_PATH}/image_classification_model")
-feature_extractor.save_pretrained(f"{MODEL_OUTPUT_PATH}/image_classification_feature_extractor")
+
+trainer.save_model(f"{MODEL_OUTPUT_PATH}/image_classification_model")
 
 task.upload_artifact("Final Model", f"{MODEL_OUTPUT_PATH}/image_classification_model")
 task.upload_artifact("Feature Extractor", f"{MODEL_OUTPUT_PATH}/image_classification_feature_extractor")
