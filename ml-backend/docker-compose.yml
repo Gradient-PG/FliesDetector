@@ -17,7 +17,7 @@ services:
       - LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=$SOURCE_DATASET_DIRECTORY
       - CSRF_TRUSTED_ORIGINS=$CSRF_TRUSTED_ORIGINS
     volumes:
-      - ~/label-studio-data:/label-studio/data:rw
+      - ${LABEL_STUDIO_DATA}:/label-studio/data:rw
       - ~/preannotated-dataset:/preannotated-dataset:rw
     restart: always
     ports:
