@@ -13,7 +13,7 @@ import uvicorn
 app = FastAPI()
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-MODELS_DIR = os.path.join(os.getcwd(), "project/code/yolo2class_pipeline/models")  # Ensure your models are here
+MODELS_DIR = os.path.join(os.getcwd(), "models")  # Ensure your models are here
 DETECTOR_PATH = os.path.join(MODELS_DIR, "detector.pt")
 
 try:
