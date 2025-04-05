@@ -6,10 +6,11 @@ import pandas as pd
 import numpy as np
 from PIL import Image
 from typing import List, Tuple
+from data_splitter import DataSplitter
 
 import splitfolders
 
-class DatasetSplitter:
+class ClassifierDatasetSplitter(DataSplitter):
     '''
     Splits whole dataset into train, test, val sets equally for each group
     '''
@@ -126,7 +127,7 @@ class DatasetSplitter:
 def main(folder_path: str, ratio: List[float], seed: int) -> None:
     # dataset_path = os.path.join(os.getcwd(), 'project', 'data', 'label_studio')
     # DatasetSplitter(dataset_path)()
-    DatasetSplitter(folder_path, tuple(ratio), seed)()
+    ClassifierDatasetSplitter(folder_path, tuple(ratio), seed)()
 
 
 if __name__ == "__main__":
@@ -135,7 +136,7 @@ if __name__ == "__main__":
                                      parts specified in ratio argument
                                     """)
     
-    parser.add_argument("--image_dir", type=str, help="Directory of the folder with data to be split (this folder should be a set of smaller folders)")
+    parser.add_argument("--image_dir", type=str, default="./project/data/label_studio", help="Directory of the folder with data to be split (this folder should be a set of smaller folders)")
     parser.add_argument("--ratio", type=float, nargs="+", default=[0.8, 0.1, 0.1] , help="How dataset should be split training_ratio val_ratio test_ratio")
     parser.add_argument("--seed", type=int, default=42, help="Seed used for randomly splitting data")
 
