@@ -1,24 +1,20 @@
 import argparse
-import requests
 import os
-import zipfile
-from PIL import Image
-
-from label_studio_sdk.client import LabelStudio
-import requests
 
 from clearml import TaskTypes
 from clearml.automation.controller import PipelineDecorator
 
-from scripts.data_splitter import DataSplitter
-from scripts.classifier_data_splitter import ClassifierDatasetSplitter
-from scripts.detector_data_splitter import DetectorDataSplitter
 
-
+@PipelineDecorator.component()
 def download_data(label_studio_url, api_key, export_type, dataset_dir):
     '''
     Download data from label-studio
     '''
+
+    import os
+    import requests
+    import zipfile
+    from label_studio_sdk.client import LabelStudio
 
     # Get projects using label_studio_sdk
     ls = LabelStudio(base_url=label_studio_url, api_key=api_key)
@@ -35,8 +31,7 @@ def download_data(label_studio_url, api_key, export_type, dataset_dir):
                 raise Exception
             # TODO it only works for formats which return zip
             # Download, extract and remove zip file
-
-            dataset_path = os.path.join(dataset_dir, str(project.id))
+            dataset_path = os.path.join(dataset_dir, 'label_studio', str(project.id))
             with open(f'{dataset_path}.zip', 'wb') as f:
                 f.write(response.content)
             with zipfile.ZipFile(f'{dataset_path}.zip', 'r') as zip_file:
@@ -46,9 +41,47 @@ def download_data(label_studio_url, api_key, export_type, dataset_dir):
         except Exception:
             print(f'Downloading project with id={project.id} failed.')
 
+PipelineDecorator.component()
 def process_data(data_dir, ratio, seed):
+    '''
+    Process data for classification and detection
+    '''
+
+    from scripts.classifier_data_splitter import ClassifierDatasetSplitter
+    from scripts.detector_data_splitter import DetectorDataSplitter
+
     ClassifierDatasetSplitter(data_dir, tuple(ratio), seed)()
+    print('Classifier dataset split successfully.')
+
     DetectorDataSplitter(data_dir, tuple(ratio), seed)()
+    print('Detector dataset split successfully.')
+
+PipelineDecorator.component()
+def upload_data(data_dir, clf_dataset_name, det_dataset_name):
+    '''
+    Upload data to clearml
+    '''
+
+    from clearml import Dataset
+
+    classification_dataset = Dataset.create(dataset_name=clf_dataset_name, dataset_project='Muszki')
+    classification_dataset.add_files(path=os.path.join(data_dir, 'classification'))
+    print('Classification dataset uploaded successfully.')
+
+    detection_dataset = Dataset.create(dataset_name=det_dataset_name, dataset_project='Muszki')
+    detection_dataset.add_files(path=os.path.join(data_dir, 'detection'))
+    print('Detection dataset uploaded successfully.')
+
+@PipelineDecorator.pipeline(name='Transfer Dataset', project='Muszki', version='1.0')
+def run_pipeline(label_studio_url, api_key, export_type, data_dir, ratio, seed, clf_dataset_name, det_dataset_name):
+    '''
+    Pipeline to download, process and upload data
+    '''
+
+    download_data(label_studio_url, api_key, export_type, data_dir)
+    process_data(data_dir, ratio, seed)
+    upload_data(data_dir, clf_dataset_name, det_dataset_name)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -59,8 +92,19 @@ if __name__ == "__main__":
     parser.add_argument("--data_dir", type=str, default=f"{os.getcwd()}/project/data", help="Directory of the root folder with data")
     parser.add_argument("--ratio", type=float, nargs="+", default=[0.8, 0.1, 0.1] , help="How dataset should be split training_ratio test_ratio val_ratio")
     parser.add_argument("--seed", type=int, default=42, help="Seed used for randomly splitting data")
+    parser.add_argument("--clf_dataset_name", type=str, default='test-classification-2', help="Name of the classification dataset in clearml")
+    parser.add_argument("--det_dataset_name", type=str, default='test-detection-2', help="Name of the detection dataset in clearml")
     
     args = parser.parse_args()
 
-    download_data(args.label_studio_url, args.api_key, args.export_type, os.path.join(args.data_dir, 'label_studio'))
-    process_data(args.data_dir, args.ratio, args.seed)
+    PipelineDecorator.run_locally()
+    run_pipeline(
+        label_studio_url=args.label_studio_url,
+        api_key=args.api_key,
+        export_type=args.export_type,
+        data_dir=args.data_dir,
+        ratio=args.ratio,
+        seed=args.seed,
+        clf_dataset_name=args.clf_dataset_name,
+        det_dataset_name=args.det_dataset_name
+    )
