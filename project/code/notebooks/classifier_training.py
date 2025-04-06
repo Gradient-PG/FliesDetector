@@ -1,4 +1,5 @@
-from datasets import load_dataset
+from datasets import DatasetDict, load_dataset
+from clearml import Task, Dataset, Logger 
 from transformers import (
     AutoImageProcessor,
     AutoModelForImageClassification,
@@ -9,40 +10,11 @@ from transformers import (
 import torch
 import evaluate
 import numpy as np
-from clearml import Task, Dataset, Logger
 from collections import Counter
-from sklearn.metrics import confusion_matrix
-
-MODEL_OUTPUT_PATH = "classifier_model"
-
-task = Task.init(
-    project_name="Muszki",
-    task_name="Classification",
-    tags=["huggingface", "classification"]
-)
-
-# clearml_dataset = Dataset.get(
-#     dataset_project="Datasets",
-#     dataset_name="MyClassificationData"
-# )
-# dataset_path = clearml_dataset.get_local_copy()
-dataset_path = "project/data/classification"
-
-# Load dataset
-dataset = load_dataset("imagefolder", data_dir=dataset_path)
-
-# Check label names
-labels = dataset["train"].features["label"].names
-num_labels = len(labels)
-print(f"Number of classes: {num_labels}")
-print(f"Class names: {labels}")
-
-# Load pretrained feature extractor and model
-model_checkpoint = "google/vit-base-patch16-224"
-feature_extractor = AutoImageProcessor.from_pretrained(model_checkpoint)
 
 class ClearMLCallback(TrainerCallback):
-    def __init__(self):
+    def __init__(self,task):
+        self.task = task
         self.best_accuracy = 0
         
     def on_log(self, args, state, control, logs=None, **kwargs):
@@ -76,106 +48,148 @@ class ClearMLCallback(TrainerCallback):
 
     def on_train_end(self, args, state, control, **kwargs):
         # Final model upload
-        task.update_output_model(
+        self.task.update_output_model(
             model_path="image_classification_model",
             model_name="ViT Classifier",
             auto_delete_file=False
         )
 
-# Preprocessing function
-def transform(example_batch):
-    # Process images with feature_extractor
-    inputs = feature_extractor(
-        [image.convert("RGB") for image in example_batch["image"]],
-        return_tensors="pt"
+def get_clearml_dataset(dataset_id):
+    clearml_dataset = Dataset.get(dataset_id=dataset_id)
+    return clearml_dataset.get_local_copy()
+
+def prepare_datasets(dataset_path, feature_extractor):
+    dataset = load_dataset("imagefolder", data_dir=dataset_path)
+    
+    if list(dataset.keys()) == ['train']:
+        split = dataset["train"].train_test_split(test_size=0.2, seed=42)
+        dataset = DatasetDict({
+            "train": split["train"],
+            "validation": split["test"]  
+        })
+    required_splits = {'train', 'validation'}
+    if not required_splits.issubset(dataset.keys()):
+        raise ValueError(f"Dataset must contain {required_splits}. accessible splits: {list(dataset.keys())}")
+    # Preprocessing function
+    def transform(example_batch):
+        # Process images with feature_extractor
+        inputs = feature_extractor(
+            [image.convert("RGB") for image in example_batch["image"]],
+            return_tensors="pt"
+        )
+        inputs["labels"] = example_batch["label"]
+        return inputs
+    # Apply preprocessing
+    preprocessed_dataset = dataset.map(
+        transform,
+        batched=True,
+        batch_size=32,
+        remove_columns=dataset["train"].column_names # Remove raw images to save memory
     )
-    inputs["labels"] = example_batch["label"]
-    return inputs
+    
+    return preprocessed_dataset, dataset["train"].features["label"].names
 
-# Apply preprocessing
-preprocessed_dataset = dataset.map(
-    transform,
-    batched=True,
-    batch_size=32,
-    remove_columns=dataset["train"].column_names  # Remove raw images to save memory
-)
-
-# Load model
-model = AutoModelForImageClassification.from_pretrained(
-    model_checkpoint,
-    ignore_mismatched_sizes=True  # In case you're changing number of classes
-)
-
-# Training configuration
-training_args = TrainingArguments(
-    output_dir=f"{MODEL_OUTPUT_PATH}/results",
-    evaluation_strategy="epoch",
-    per_device_train_batch_size=32,
-    per_device_eval_batch_size=32,
-    num_train_epochs=10,
-    learning_rate=5e-4,  # Increased learning rate
-    warmup_steps=500,  # Added warmup
-    logging_steps=10,
-    remove_unused_columns=False,
-    fp16=False,  # Disabled mixed precision for debugging
-    dataloader_num_workers=4,
-    gradient_accumulation_steps=1,
-    weight_decay=0.01,
-    report_to="none"
-)
-
-def log_dataset_stats():
-    print(Counter(dataset["train"]["label"]).most_common())
+def log_dataset_stats(dataset, labels, task):
     stats = {
         "train_samples": len(dataset["train"]),
-        "valid_samples": len(dataset["test"]),
+        "valid_samples": len(dataset["validation"]),
         "class_distribution": {
             labels[i]: count for i, count in 
-            Counter(dataset["train"]["label"]).most_common()
+            Counter(dataset["train"]["labels"]).most_common()
         }
     }
     task.connect(stats, name="Dataset Statistics")
+    print("Dataset stats:", stats)
 
-log_dataset_stats()
+def train_model(
+    dataset_id="c2a05425242448ab84040a8cbaa6e639",
+    model_checkpoint="google/vit-base-patch16-224",
+    output_path="classifier_model",
+    training_args=None
+):
+    """Main training function for use in pipelines"""
+    
+    # Task initialization in clearml
+    task = Task.init(
+        project_name="Muszki",
+        task_name="Classification",
+        tags=["huggingface", "classification", "pipeline"]
+    )
+    
+    # Training configuration
+    if training_args is None:
+        training_args = {
+            "output_dir": f"{output_path}/results",
+            "evaluation_strategy": "epoch",
+            "per_device_train_batch_size": 32,
+            "per_device_eval_batch_size": 32,
+            "num_train_epochs": 4,
+            "learning_rate": 5e-4, # Increased learning rate
+            "warmup_steps": 500,  # Added warmup
+            "logging_steps": 10,
+            "remove_unused_columns": False,
+            "fp16": False,   # Disabled mixed precision for debugging
+            "dataloader_num_workers": 4,
+            "weight_decay": 0.01,
+            "report_to": "none"
+        }
+    
+    task.connect(training_args)
+    training_args = TrainingArguments(**training_args)
+    
+    # Loading data
+    dataset_path = get_clearml_dataset(dataset_id)
+    
+    # Model preparation
+    feature_extractor = AutoImageProcessor.from_pretrained(model_checkpoint)
+    model = AutoModelForImageClassification.from_pretrained(
+        model_checkpoint,
+        ignore_mismatched_sizes=True
+    )
+    
+    # Data preparation
+    preprocessed_dataset, labels = prepare_datasets(dataset_path, feature_extractor)
+    log_dataset_stats(preprocessed_dataset, labels, task)
+    
+    # Metrics
+    metric = evaluate.load("accuracy")
+    def compute_metrics(eval_pred):
+        predictions, labels = eval_pred
+        predictions = np.argmax(predictions, axis=1)
+        return metric.compute(predictions=predictions, references=labels)
+    
+    # Initialize Trainer
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=preprocessed_dataset["train"],
+        eval_dataset=preprocessed_dataset["validation"],
+        compute_metrics=compute_metrics,
+        tokenizer=feature_extractor,
+        callbacks=[ClearMLCallback(task)]  
+    )
+    trainer.train()
+    eval_results = trainer.evaluate()
+    task.get_logger().report_single_value("Final Accuracy", eval_results["eval_accuracy"])
+    
+    # Save model
+    model.save_pretrained(f"{output_path}/model")
+    feature_extractor.save_pretrained(f"{output_path}/feature_extractor")
+    
+    # Upload artifacts
+    task.update_output_model(
+        model_path=f"{output_path}/model",
+        model_name="ViT Classifier",
+        auto_delete_file=False
+    )
+    
+    return {
+        "model_path": f"{output_path}/model",
+        "feature_extractor_path": f"{output_path}/feature_extractor",
+        "eval_results": eval_results
+    }
 
-task.connect(training_args.to_dict())  # Log all training arguments
-task.connect({"model_name": model_checkpoint})
-
-# Metric configuration
-metric = evaluate.load("accuracy")
-
-def compute_metrics(eval_pred):
-    predictions, labels = eval_pred
-    predictions = np.argmax(predictions, axis=1)
-    return metric.compute(predictions=predictions, references=labels)
-
-# Initialize Trainer
-trainer = Trainer(
-    model=model,
-    args=training_args,
-    train_dataset=preprocessed_dataset["train"],
-    eval_dataset=preprocessed_dataset["test"],  # or ["validation"] if available
-    compute_metrics=compute_metrics,
-    tokenizer=feature_extractor,  # For image feature collation
-    callbacks=[ClearMLCallback()] 
-)
-
-with open(f"{MODEL_OUTPUT_PATH}/model_arch.txt", "w") as f:
-    print(model, file=f)
-task.upload_artifact("Model Architecture", f"{MODEL_OUTPUT_PATH}/model_arch.txt")
-
-# Start training
-train_results = trainer.train()
-
-# Evaluate after training
-eval_results = trainer.evaluate()
-print(f"Final evaluation results: {eval_results}")
-
-# Save model and feature extractor
-model.save_pretrained(f"{MODEL_OUTPUT_PATH}/image_classification_model")
-feature_extractor.save_pretrained(f"{MODEL_OUTPUT_PATH}/image_classification_feature_extractor")
-
-task.upload_artifact("Final Model", f"{MODEL_OUTPUT_PATH}/image_classification_model")
-task.upload_artifact("Feature Extractor", f"{MODEL_OUTPUT_PATH}/image_classification_feature_extractor")
-
-task.close()
+if __name__ == "__main__":
+    result = train_model()
+    
+    print("Results:", result)
