@@ -20,3 +20,6 @@ ml-backend/cache*
 ml-backend/data
 ml-backend/models/*
 >>>>>>> main
+
+# exclude images from being pushed to repo
+**/dataset/*
