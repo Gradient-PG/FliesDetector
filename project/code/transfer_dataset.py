@@ -1,7 +1,5 @@
 import argparse
 import os
-
-from clearml import TaskTypes
 from clearml.automation.controller import PipelineDecorator
 
 
@@ -41,7 +39,9 @@ def download_data(label_studio_url, api_key, export_type, dataset_dir):
         except Exception:
             print(f'Downloading project with id={project.id} failed.')
 
-PipelineDecorator.component()
+    return dataset_dir
+
+@PipelineDecorator.component()
 def process_data(data_dir, ratio, seed):
     '''
     Process data for classification and detection
@@ -56,7 +56,9 @@ def process_data(data_dir, ratio, seed):
     DetectorDataSplitter(data_dir, tuple(ratio), seed)()
     print('Detector dataset split successfully.')
 
-PipelineDecorator.component()
+    return data_dir
+
+@PipelineDecorator.component()
 def upload_data(data_dir, clf_dataset_name, det_dataset_name):
     '''
     Upload data to clearml
@@ -78,8 +80,9 @@ def run_pipeline(label_studio_url, api_key, export_type, data_dir, ratio, seed, 
     Pipeline to download, process and upload data
     '''
 
-    download_data(label_studio_url, api_key, export_type, data_dir)
-    process_data(data_dir, ratio, seed)
+    #TODO Components have to return argument to next step so that they wait for each other
+    data_dir = download_data(label_studio_url, api_key, export_type, data_dir)
+    data_dir = process_data(data_dir, ratio, seed)
     upload_data(data_dir, clf_dataset_name, det_dataset_name)
 
 
