@@ -18,3 +18,7 @@ ml-backend/cache*
 ml-backend/data
 ml-backend/models/*
 project/code/yolo2class_pipeline/models/classificator
+
+# exclude images from being pushed to repo
+**/dataset/*
+>>>>>>> feat/google-drive-dataset-converter
