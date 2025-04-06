@@ -89,7 +89,8 @@ def prepare_datasets(dataset_path, feature_extractor):
     
     return preprocessed_dataset, dataset["train"].features["label"].names
 
-def log_dataset_stats(dataset, labels, task):
+
+def log_dataset_stats():
     stats = {
         "train_samples": len(dataset["train"]),
         "valid_samples": len(dataset["validation"]),
@@ -123,7 +124,7 @@ def train_model(
             "evaluation_strategy": "epoch",
             "per_device_train_batch_size": 32,
             "per_device_eval_batch_size": 32,
-            "num_train_epochs": 4,
+            "num_train_epochs": 10,
             "learning_rate": 5e-4, # Increased learning rate
             "warmup_steps": 500,  # Added warmup
             "logging_steps": 10,
@@ -193,3 +194,4 @@ if __name__ == "__main__":
     result = train_model()
     
     print("Results:", result)
+

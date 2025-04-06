@@ -5,6 +5,7 @@ import numpy as np
 
 from torchvision.transforms import v2
 import torch
+from transformers import pipeline, AutoModelForImageClassification, AutoImageProcessor
 
 import os
 from abc import ABC, abstractmethod
@@ -103,3 +104,52 @@ class ResnetClassifier(Classifier):
     
     def get_transformations(self) -> Callable:
         return self.preprocess
+    
+    
+class VitClassifier(Classifier):
+    """
+    Classifier based on HuggingFace transformers ViT Base 16-224.
+    Uses a pipeline for image-classification.
+    """
+    def __init__(self, model_path: str | os.PathLike, device: torch.DeviceObjType, confidence: Optional[float] = 0):
+        super().__init__(model_path, device, confidence)
+        base_dir = os.path.join(os.path.abspath(model_path), "classificator")
+
+        model = AutoModelForImageClassification.from_pretrained(base_dir)
+        feature_extractor = AutoImageProcessor.from_pretrained(base_dir)
+        
+        self.cls_pipeline = pipeline(
+            "image-classification",
+            model=model,
+            feature_extractor=feature_extractor,
+            device=0 if device.type == "cuda" else -1
+        )
+    
+    def inference(self, images: List[np.ndarray[Image.Image]]) -> List[Tuple[str, float]]:
+        results = []
+        for idx, img in enumerate(images):
+            result_per_image = []
+            if isinstance(img, np.ndarray):
+                try:
+                    if img.ndim == 4:  # If batch of images, convert to list of PIL images
+                        img = [Image.fromarray(img[i].transpose(1, 2, 0).astype(np.uint8)) for i in range(img.shape[0])]
+                except Exception as e:
+                    print(f"{idx}: Error converting image: {e}")
+                    continue
+
+            preds = self.cls_pipeline(img)
+            for pred in preds:
+                prediction = max(pred, key=lambda x: x.get("score", 0.0))
+                label = prediction.get("label", "Unknown")
+                score = prediction.get("score", 0.0)
+                if score > self.config['confidence']:
+                    print(f"{idx}: {label}: {100 * score:.1f}%")
+                    result_per_image.append((label, 100 * score))
+                else:
+                    print(f"{idx}: Unsure: {100 * score:.1f}%")
+                    result_per_image.append(("Unsure", 100 * score))
+            results.append(result_per_image)
+        return results
+
+    def get_transformations(self) -> Callable:
+        return lambda img: self.cls_pipeline.feature_extractor(img, return_tensors="pt")["pixel_values"].squeeze(0)

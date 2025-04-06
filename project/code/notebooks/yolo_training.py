@@ -50,7 +50,7 @@ def train_segmentator(
         model = YOLO(f"{model_variant}.pt")
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         model.to(device)
-
+        
         # Trening
         results = model.train(
             data=yaml_path,
@@ -75,3 +75,4 @@ if __name__ == "__main__":
         epochs=32,
         batch_size=8
     )
+
