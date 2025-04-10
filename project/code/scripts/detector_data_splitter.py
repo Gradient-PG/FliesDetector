@@ -4,26 +4,31 @@ import shutil
 import yaml
 import argparse
 from typing import List, Tuple, Optional
+from scripts.data_splitter import DataSplitter
 
-class DetectorDataSplitter:
+class DetectorDataSplitter(DataSplitter):
     '''
     Splits dataset into training, test, validation sets
     '''
-    def __init__(self, source_path: str, destination_path: str):
+    def __init__(self, data_directory: str, ratio: Tuple[float], seed: int = 42):
         '''
         :param source_path: path pointing to input data directory
         :param destination_path: path for splitted data
+        :param ratio: Tuple of sizes each split should be (train, val, test)
+        :param seed: Seed used for random generation of data splits
         '''
-        self.source_dir = source_path
-        self.dest_dir = destination_path
+        self.source_dir = os.path.join(data_directory, 'label_studio')
+        self.dest_dir = os.path.join(data_directory, 'detection')
+        self.ratio = ratio
+        self.seed = seed
 
         self.DEST_PATHS = {
-            'dest_img_train': os.path.join(destination_path, 'images', 'train'),
-            'dest_img_val': os.path.join(destination_path, 'images', 'val'),
-            'dest_img_test': os.path.join(destination_path, 'images', 'test'),
-            'dest_lbl_train': os.path.join(destination_path, 'labels', 'train'),
-            'dest_lbl_val': os.path.join(destination_path, 'labels', 'val'),
-            'dest_lbl_test': os.path.join(destination_path, 'labels', 'test'),
+            'dest_img_train': os.path.join(self.dest_dir, 'images', 'train'),
+            'dest_img_val': os.path.join(self.dest_dir, 'images', 'val'),
+            'dest_img_test': os.path.join(self.dest_dir, 'images', 'test'),
+            'dest_lbl_train': os.path.join(self.dest_dir, 'labels', 'train'),
+            'dest_lbl_val': os.path.join(self.dest_dir, 'labels', 'val'),
+            'dest_lbl_test': os.path.join(self.dest_dir, 'labels', 'test'),
         }
 
         # Lists for collecting tuples like this: (img_path, label_path)
@@ -75,6 +80,11 @@ class DetectorDataSplitter:
         :param val_part: (0,1) float number representing portion of data to be in validation split
         :param seed: int number to keep randomness 
         '''
+
+        if train_part + test_part + val_part != 1.0:
+            train_part, test_part, val_part = 0.8, 0.1, 0.1
+            print(f"Warning: Splitting ratios don't add up to 1, dafaults used (0.8, 0.1, 0.1)")
+
         random.seed(seed)
         # Randomly distribute file pairs in the list so that every split is different
         random.shuffle(self.file_pairs_list)
@@ -146,20 +156,14 @@ class DetectorDataSplitter:
 
         print(f"YAML config written to: {yaml_path}")
 
-    def run(self, 
-            train_part: Optional[float] = 0.8, 
-            test_part: Optional[float] = 0.1, 
-            val_part: Optional[float] = 0.1,
-            seed: Optional[int] = 42) -> None:
+    def __call__(self) -> None:
         '''
         This function is running whole pipeline for splitting data accordingly to rules
-        :param train_part: float representing how much data should be in train split
-        :param test_part: float representing how much data should be in test split
-        :param val_part: float representing how much data should be in val split
         '''
+
         self.create_dirs()
         self.collect_file_pairs()
-        self.split_files(train_part, test_part, val_part, seed)
+        self.split_files(*self.ratio, self.seed)
 
         self.copy_files(self.train_files, self.DEST_PATHS['dest_img_train'], self.DEST_PATHS['dest_lbl_train'])
         self.copy_files(self.val_files, self.DEST_PATHS['dest_img_val'], self.DEST_PATHS['dest_lbl_val'])
@@ -170,8 +174,8 @@ class DetectorDataSplitter:
         print("Splitting completed.")
 
 def main(folder_path: str, ratio: List[float], seed: int) -> None:
-    DetectorDataSplitter(folder_path, os.path.join(os.getcwd(), 'project', 'data', 'detection')).run(*ratio, seed)
-
+    DetectorDataSplitter(folder_path, tuple(ratio), seed)()
+    
 
 # For more info
 # python DetectorDataSplitter.py -h / --help
@@ -181,10 +185,10 @@ if __name__ == "__main__":
                                      parts specified in ratio argument
                                     """)
     
-    parser.add_argument("--image_dir", type=str, help="Directory of the folder with data to be split (this folder should be a set of smaller folders)")
+    parser.add_argument("--data_dir", type=str, default=f"{os.getcwd()}/project/data", help="Directory of the root folder with data")
     parser.add_argument("--ratio", type=float, nargs="+", default=[0.8, 0.1, 0.1] , help="How dataset should be split training_ratio test_ratio val_ratio")
     parser.add_argument("--seed", type=int, default=42, help="Seed used for randomly splitting data")
 
     args = parser.parse_args()
 
-    main(args.image_dir, args.ratio, args.seed)
+    main(args.data_dir, args.ratio, args.seed)

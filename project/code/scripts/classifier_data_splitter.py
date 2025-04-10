@@ -6,28 +6,28 @@ import pandas as pd
 import numpy as np
 from PIL import Image
 from typing import List, Tuple
+from scripts.data_splitter import DataSplitter
 
 import splitfolders
 
-class DatasetSplitter:
+class ClassifierDatasetSplitter(DataSplitter):
     '''
     Splits whole dataset into train, test, val sets equally for each group
     '''
     def __init__(self, data_directory: str, ratio: Tuple[float] = (0.8, 0.1, 0.1), seed: int = 42):
         '''
-        :param data_directory: path to the input folder (data folder to be split)
+        :param data_directory: path to the root folder
         :param ratio: Tuple of sizes each split should be (train, val, test)
         :param seed: Seed used for random generation of data splits
         '''
-        cwd = os.getcwd()
-        data_path = os.path.join(cwd, 'project', 'data')
+
         self.ratio = ratio
         self.seed = seed
         self.PATHS = {
-            'orig_data_path': data_directory,
-            'cut_image_path': os.path.join(data_path, 'classification', 'temp'),
-            'final_dataset_path': os.path.join(data_path, 'classification'),
-            'classes_path': os.path.join(data_path, 'info', 'classes.json')
+            'orig_data_path': os.path.join(data_directory, 'label_studio'),
+            'cut_image_path': os.path.join(data_directory, 'classification', 'temp'),
+            'final_dataset_path': os.path.join(data_directory, 'classification'),
+            'classes_path': os.path.join(data_directory, 'info', 'classes.json')
         }
         self.classes = {}
     
@@ -126,7 +126,7 @@ class DatasetSplitter:
 def main(folder_path: str, ratio: List[float], seed: int) -> None:
     # dataset_path = os.path.join(os.getcwd(), 'project', 'data', 'label_studio')
     # DatasetSplitter(dataset_path)()
-    DatasetSplitter(folder_path, tuple(ratio), seed)()
+    ClassifierDatasetSplitter(folder_path, tuple(ratio), seed)()
 
 
 if __name__ == "__main__":
@@ -135,11 +135,11 @@ if __name__ == "__main__":
                                      parts specified in ratio argument
                                     """)
     
-    parser.add_argument("--image_dir", type=str, help="Directory of the folder with data to be split (this folder should be a set of smaller folders)")
+    parser.add_argument("--data_dir", type=str, default=f"{os.getcwd()}/project/data", help="Directory of the root folder with data")
     parser.add_argument("--ratio", type=float, nargs="+", default=[0.8, 0.1, 0.1] , help="How dataset should be split training_ratio val_ratio test_ratio")
     parser.add_argument("--seed", type=int, default=42, help="Seed used for randomly splitting data")
 
     args = parser.parse_args()
 
-    main(args.image_dir, args.ratio, args.seed)
+    main(args.data_dir, args.ratio, args.seed)
     
