@@ -64,14 +64,18 @@ def upload_data(data_dir, clf_dataset_name, det_dataset_name):
     Upload data to clearml
     '''
 
-    from clearml import Dataset
+    from clearml import Dataset, Task
+
+    task = Task.current_task()
 
     classification_dataset = Dataset.create(dataset_name=clf_dataset_name, dataset_project='Muszki')
     classification_dataset.add_files(path=os.path.join(data_dir, 'classification'))
+    task.upload_artifact(name="Classification_Dataset", artefact_object=classification_dataset.id)
     print('Classification dataset uploaded successfully.')
 
     detection_dataset = Dataset.create(dataset_name=det_dataset_name, dataset_project='Muszki')
     detection_dataset.add_files(path=os.path.join(data_dir, 'detection'))
+    task.upload_artifact(name="Detection_Dataset", artefact_object=detection_dataset.id)
     print('Detection dataset uploaded successfully.')
 
 @PipelineDecorator.pipeline(name='Transfer Dataset', project='Muszki', version='1.0')

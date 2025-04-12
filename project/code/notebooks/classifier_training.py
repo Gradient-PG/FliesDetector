@@ -1,5 +1,5 @@
 from datasets import DatasetDict, load_dataset
-from clearml import Task, Dataset, Logger 
+from clearml import Task, Dataset, Logger, PipelineDecorator
 from transformers import (
     AutoImageProcessor,
     AutoModelForImageClassification,
@@ -102,6 +102,7 @@ def log_dataset_stats():
     task.connect(stats, name="Dataset Statistics")
     print("Dataset stats:", stats)
 
+@PipelineDecorator.component()
 def train_model(
     dataset_id="c2a05425242448ab84040a8cbaa6e639",
     model_checkpoint="google/vit-base-patch16-224",

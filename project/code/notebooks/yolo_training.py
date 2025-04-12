@@ -1,9 +1,11 @@
-from clearml import Task, Dataset
+from clearml import Task, Dataset, PipelineDecorator
 from ultralytics import YOLO
 import os
 import torch
 import yaml  
 
+
+@PipelineDecorator.component()
 def train_segmentator(
     dataset_id: str,
     project_name: str = "Muszki",
