@@ -65,14 +65,14 @@ def train_segmentator(
         return results
 
     except Exception as e:
-        print(f"Błąd podczas treningu: {str(e)}")
+        print(f"Error during training: {str(e)}")
         raise
 
 if __name__ == "__main__":
     train_segmentator(
         dataset_id="ab637d3b70144a949f68dac5baac4d0f",  
         model_variant="yolo11n",
-        epochs=32,
+        epochs=2,
         batch_size=8
     )
 

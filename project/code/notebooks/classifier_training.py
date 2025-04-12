@@ -12,8 +12,9 @@ import evaluate
 import numpy as np
 from collections import Counter
 
+# Custom callback to log metrics and upload final model to ClearML
 class ClearMLCallback(TrainerCallback):
-    def __init__(self,task):
+    def __init__(self, task):
         self.task = task
         self.best_accuracy = 0
         
@@ -29,7 +30,6 @@ class ClearMLCallback(TrainerCallback):
 
     def on_evaluate(self, args, state, control, metrics=None, **kwargs):
         if state.is_world_process_zero and metrics:
-            # Log validation metrics
             for key, value in metrics.items():
                 Logger.current_logger().report_scalar(
                     title="Validation Metrics",
@@ -37,8 +37,6 @@ class ClearMLCallback(TrainerCallback):
                     value=value,
                     iteration=state.global_step
                 )
-            
-            # Track best accuracy
             current_acc = metrics.get("eval_accuracy", 0)
             if current_acc > self.best_accuracy:
                 self.best_accuracy = current_acc
@@ -47,53 +45,60 @@ class ClearMLCallback(TrainerCallback):
                 )
 
     def on_train_end(self, args, state, control, **kwargs):
-        # Final model upload
         self.task.update_output_model(
             model_path="image_classification_model",
             model_name="ViT Classifier",
             auto_delete_file=False
         )
 
+# Load dataset from ClearML by ID
 def get_clearml_dataset(dataset_id):
     clearml_dataset = Dataset.get(dataset_id=dataset_id)
     return clearml_dataset.get_local_copy()
 
-def prepare_datasets(dataset_path, feature_extractor):
+# Prepare dataset: assume train/val/test are already split in folders
+def prepare_datasets(dataset_path, feature_extractor,split_names=None):
     dataset = load_dataset("imagefolder", data_dir=dataset_path)
-    
-    if list(dataset.keys()) == ['train']:
-        split = dataset["train"].train_test_split(test_size=0.2, seed=42)
-        dataset = DatasetDict({
-            "train": split["train"],
-            "validation": split["test"]  
-        })
-    required_splits = {'train', 'validation'}
-    if not required_splits.issubset(dataset.keys()):
-        raise ValueError(f"Dataset must contain {required_splits}. accessible splits: {list(dataset.keys())}")
-    # Preprocessing function
+
+    if split_names is None:
+        split_names = {
+            "train": "train",
+            "validation": "validation",
+            "test": "test"
+        }
+    # Ensure required splits are present
+    expected_keys = set(split_names.values())
+    if not expected_keys.issubset(dataset.keys()):
+        raise ValueError(f"Dataset must contain splits: {expected_keys}. Found: {set(dataset.keys())}")
+
+    # Apply feature extraction and label assignment
     def transform(example_batch):
-        # Process images with feature_extractor
         inputs = feature_extractor(
             [image.convert("RGB") for image in example_batch["image"]],
             return_tensors="pt"
         )
         inputs["labels"] = example_batch["label"]
         return inputs
-    # Apply preprocessing
-    preprocessed_dataset = dataset.map(
-        transform,
-        batched=True,
-        batch_size=32,
-        remove_columns=dataset["train"].column_names # Remove raw images to save memory
-    )
-    
-    return preprocessed_dataset, dataset["train"].features["label"].names
 
+    # Preprocess the datasets
+    preprocessed_dataset = DatasetDict({
+        split: dataset[original_name].map(
+            transform,
+            batched=True,
+            batch_size=32,
+            remove_columns=dataset[original_name].column_names
+        )
+        for split, original_name in split_names.items()
+    })
 
-def log_dataset_stats():
+    return preprocessed_dataset, dataset[split_names["train"]].features["label"].names
+
+# Log dataset statistics to ClearML
+def log_dataset_stats(dataset, labels, task):
     stats = {
         "train_samples": len(dataset["train"]),
         "valid_samples": len(dataset["validation"]),
+        "test_samples": len(dataset["test"]),
         "class_distribution": {
             labels[i]: count for i, count in 
             Counter(dataset["train"]["labels"]).most_common()
@@ -102,22 +107,22 @@ def log_dataset_stats():
     task.connect(stats, name="Dataset Statistics")
     print("Dataset stats:", stats)
 
+# Main training pipeline function
 def train_model(
-    dataset_id="c2a05425242448ab84040a8cbaa6e639",
+    dataset_id="15968f7743d1409980f0ec60e2a881be",
     model_checkpoint="google/vit-base-patch16-224",
     output_path="classifier_model",
-    training_args=None
+    training_args=None,
+    split_names=None 
 ):
-    """Main training function for use in pipelines"""
-    
-    # Task initialization in clearml
+    # ClearML task initialization
     task = Task.init(
         project_name="Muszki",
         task_name="Classification",
         tags=["huggingface", "classification", "pipeline"]
     )
     
-    # Training configuration
+    # Define default training arguments if not passed
     if training_args is None:
         training_args = {
             "output_dir": f"{output_path}/results",
@@ -125,41 +130,37 @@ def train_model(
             "per_device_train_batch_size": 32,
             "per_device_eval_batch_size": 32,
             "num_train_epochs": 10,
-            "learning_rate": 5e-4, # Increased learning rate
-            "warmup_steps": 500,  # Added warmup
+            "learning_rate": 5e-4,
+            "warmup_steps": 500,
             "logging_steps": 10,
             "remove_unused_columns": False,
-            "fp16": False,   # Disabled mixed precision for debugging
+            "fp16": False,
             "dataloader_num_workers": 4,
             "weight_decay": 0.01,
             "report_to": "none"
         }
-    
+
     task.connect(training_args)
     training_args = TrainingArguments(**training_args)
-    
-    # Loading data
+
+    # Load and prepare datasets
     dataset_path = get_clearml_dataset(dataset_id)
-    
-    # Model preparation
     feature_extractor = AutoImageProcessor.from_pretrained(model_checkpoint)
     model = AutoModelForImageClassification.from_pretrained(
         model_checkpoint,
         ignore_mismatched_sizes=True
     )
-    
-    # Data preparation
-    preprocessed_dataset, labels = prepare_datasets(dataset_path, feature_extractor)
+    preprocessed_dataset, labels = prepare_datasets(dataset_path, feature_extractor, split_names)
     log_dataset_stats(preprocessed_dataset, labels, task)
-    
-    # Metrics
+
+    # Define accuracy metric
     metric = evaluate.load("accuracy")
     def compute_metrics(eval_pred):
         predictions, labels = eval_pred
         predictions = np.argmax(predictions, axis=1)
         return metric.compute(predictions=predictions, references=labels)
-    
-    # Initialize Trainer
+
+    # Trainer setup
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -167,31 +168,46 @@ def train_model(
         eval_dataset=preprocessed_dataset["validation"],
         compute_metrics=compute_metrics,
         tokenizer=feature_extractor,
-        callbacks=[ClearMLCallback(task)]  
+        callbacks=[ClearMLCallback(task)]
     )
+
+    # Training and validation
     trainer.train()
     eval_results = trainer.evaluate()
     task.get_logger().report_single_value("Final Accuracy", eval_results["eval_accuracy"])
-    
-    # Save model
+
+    # Final test set evaluation
+    test_results = trainer.evaluate(eval_dataset=preprocessed_dataset["test"])
+    task.get_logger().report_scalar(
+        title="Test Metrics",
+        series="Test Accuracy",
+        value=test_results["eval_accuracy"],
+        iteration=0
+    )
+
+    # Save model and processor
     model.save_pretrained(f"{output_path}/model")
     feature_extractor.save_pretrained(f"{output_path}/feature_extractor")
-    
-    # Upload artifacts
+
+    # Upload model to ClearML
     task.update_output_model(
         model_path=f"{output_path}/model",
         model_name="ViT Classifier",
         auto_delete_file=False
     )
-    
+
     return {
         "model_path": f"{output_path}/model",
         "feature_extractor_path": f"{output_path}/feature_extractor",
-        "eval_results": eval_results
+        "eval_results": eval_results,
+        "test_results": test_results
     }
 
 if __name__ == "__main__":
-    result = train_model()
-    
+    custom_splits = {
+    "train": "training",
+    "validation": "val",
+    "test": "testing"
+    }
+    result = train_model(split_names=custom_splits)
     print("Results:", result)
-
