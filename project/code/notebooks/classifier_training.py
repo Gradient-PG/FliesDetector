@@ -59,7 +59,6 @@ def get_clearml_dataset(dataset_id):
 # Prepare dataset: assume train/val/test are already split in folders
 def prepare_datasets(dataset_path, feature_extractor,split_names=None):
     dataset = load_dataset("imagefolder", data_dir=dataset_path)
-
     if split_names is None:
         split_names = {
             "train": "train",
@@ -90,7 +89,6 @@ def prepare_datasets(dataset_path, feature_extractor,split_names=None):
         )
         for split, original_name in split_names.items()
     })
-
     return preprocessed_dataset, dataset[split_names["train"]].features["label"].names
 
 # Log dataset statistics to ClearML
@@ -109,7 +107,7 @@ def log_dataset_stats(dataset, labels, task):
 
 # Main training pipeline function
 def train_model(
-    dataset_id="15968f7743d1409980f0ec60e2a881be",
+    dataset_id="fbaaa3930a40462482043d1cd6963096",
     model_checkpoint="google/vit-base-patch16-224",
     output_path="classifier_model",
     training_args=None,
@@ -129,7 +127,7 @@ def train_model(
             "evaluation_strategy": "epoch",
             "per_device_train_batch_size": 32,
             "per_device_eval_batch_size": 32,
-            "num_train_epochs": 10,
+            "num_train_epochs":10,
             "learning_rate": 5e-4,
             "warmup_steps": 500,
             "logging_steps": 10,
@@ -204,10 +202,6 @@ def train_model(
     }
 
 if __name__ == "__main__":
-    custom_splits = {
-    "train": "training",
-    "validation": "val",
-    "test": "testing"
-    }
-    result = train_model(split_names=custom_splits)
+    
+    result = train_model()
     print("Results:", result)
