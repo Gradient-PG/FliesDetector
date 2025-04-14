@@ -4,8 +4,7 @@ import os
 import torch
 import yaml  
 
-
-@PipelineDecorator.component()
+@PipelineDecorator.component(return_values=["results"])
 def train_segmentator(
     dataset_id: str,
     project_name: str = "Muszki",
@@ -16,9 +15,6 @@ def train_segmentator(
 ):
     """Training function integrating ClearML with YOLO"""
     try:
-        # Creating a ClearML Task
-        task = Task.init(project_name=project_name, task_name=task_name)
-        
         # Loading dataset from ClearML
         dataset = Dataset.get(dataset_id=dataset_id)
         dataset_path = dataset.get_local_copy()
@@ -28,43 +24,33 @@ def train_segmentator(
             'names': ['fly'], 
             'nc': 1,           
             'path': dataset_path,
-            'train': 'train', 
-            'val': 'val',
-            'test': 'test'      
+            'train': 'images/train', 
+            'val': 'images/val',
+            'test': 'images/test'      
         }
 
         # Save YAML file
         yaml_path = os.path.join(dataset_path, 'detection_set.yaml')
         with open(yaml_path, 'w') as f:
-            yaml.dump(yaml_config, f, default_flow_style=False)  
-        
-        # Setting Up Training Arguments
-        task.set_parameters({
-            "model_variant": model_variant,
-            "epochs": epochs,
-            "batch_size": batch_size,
-            "dataset_id": dataset_id,
-            "dataset_path": dataset_path,
-            "yaml_path": yaml_path
-        })
+            yaml.dump(yaml_config, f, default_flow_style=False)
 
         # Loading Model
         model = YOLO(f"{model_variant}.pt")
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         model.to(device)
         
-        # Trening
-        results = model.train(
+        args = dict(
             data=yaml_path,
             epochs=epochs,
             batch=batch_size,
             device=device.index if device.type == 'cuda' else 'cpu'
         )
 
+        # Trening
+        results = model.train(**args)
+
         # Validation
-        model.val(data=yaml_path, save_json=True)
-        
-        return results
+        # model.val(data=yaml_path, save_json=True)
 
     except Exception as e:
         print(f"Błąd podczas treningu: {str(e)}")

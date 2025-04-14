@@ -3,7 +3,7 @@ import os
 from clearml.automation.controller import PipelineDecorator
 
 
-@PipelineDecorator.component()
+@PipelineDecorator.component(return_values=["data_dir"])
 def download_data(label_studio_url, api_key, export_type, dataset_dir):
     '''
     Download data from label-studio
@@ -41,7 +41,7 @@ def download_data(label_studio_url, api_key, export_type, dataset_dir):
 
     return dataset_dir
 
-@PipelineDecorator.component()
+@PipelineDecorator.component(return_values=["data_dir"])
 def process_data(data_dir, ratio, seed):
     '''
     Process data for classification and detection
@@ -58,25 +58,26 @@ def process_data(data_dir, ratio, seed):
 
     return data_dir
 
-@PipelineDecorator.component()
+@PipelineDecorator.component(return_values=["classifier_id", "detection_id"])
 def upload_data(data_dir, clf_dataset_name, det_dataset_name):
     '''
     Upload data to clearml
     '''
 
-    from clearml import Dataset, Task
-
-    task = Task.current_task()
+    from clearml import Dataset
 
     classification_dataset = Dataset.create(dataset_name=clf_dataset_name, dataset_project='Muszki')
     classification_dataset.add_files(path=os.path.join(data_dir, 'classification'))
-    task.upload_artifact(name="Classification_Dataset", artefact_object=classification_dataset.id)
+    classification_dataset.upload()
+    classification_dataset.finalize()
     print('Classification dataset uploaded successfully.')
 
     detection_dataset = Dataset.create(dataset_name=det_dataset_name, dataset_project='Muszki')
     detection_dataset.add_files(path=os.path.join(data_dir, 'detection'))
-    task.upload_artifact(name="Detection_Dataset", artefact_object=detection_dataset.id)
+    detection_dataset.upload()
+    detection_dataset.finalize()
     print('Detection dataset uploaded successfully.')
+    return classification_dataset.id, detection_dataset.id
 
 @PipelineDecorator.pipeline(name='Transfer Dataset', project='Muszki', version='1.0')
 def run_pipeline(label_studio_url, api_key, export_type, data_dir, ratio, seed, clf_dataset_name, det_dataset_name):
