@@ -23,8 +23,8 @@ services:
     ports:
       - "8082:8080" # 8080 is being used
 
-  yolo:
-    container_name: yolo
+  ml-backend:
+    container_name: ml-backend
     image: humansignal/yolo:v0
     networks:
       - external

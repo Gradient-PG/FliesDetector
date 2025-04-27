@@ -38,7 +38,7 @@ class YOLO(LabelStudioMLBase):
         """Configure any parameters of your model here"""
         self.set("model_version", "yolo")
         # TODO Here write the name of the file with model weights
-        self.set("model_path", "best.pt")
+        self.set("model_path", "detector.pt")
 
     def detect_control_models(self) -> List[ControlModel]:
         """Detect control models based on the labeling config.
