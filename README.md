@@ -19,7 +19,7 @@ cp -R classifier_model/image_classification_model/* project/code/yolo2class_pipe
 cd project
 docker compose up
 ```
-6. Open the app in your browser
+5. Open the app in your browser
 ```bash
 http://localhost:7860
 ```
