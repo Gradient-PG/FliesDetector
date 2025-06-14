@@ -8,9 +8,9 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 RUN pip install --upgrade pip && \
-    pip install transformers fastapi uvicorn pillow numpy torch ultralytics python-multipart
+    pip install transformers fastapi uvicorn pillow numpy torch ultralytics python-multipart gradio
 
-COPY ./project/code/yolo2class_pipeline/ .
+COPY ./code/yolo2class_pipeline/ .
 
 EXPOSE 8000
 

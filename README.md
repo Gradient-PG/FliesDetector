@@ -14,15 +14,12 @@ python project/code/notebooks/classifier_training.py
 ```bash
 cp -R classifier_model/image_classification_model/* project/code/yolo2class_pipeline/models/classificator
 ```
-4. Build docker image
+4. Run docker containers
 ```bash
-docker build -t fliesdetector .
-```
-5. Run the docker image
-```bash
-docker run -p 8000:8000 fliesdetector
+cd project
+docker compose up
 ```
 6. Open the app in your browser
 ```bash
-http://localhost:8000/docs
+http://localhost:7860
 ```

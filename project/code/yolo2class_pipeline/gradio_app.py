@@ -7,7 +7,7 @@ import os
 import tempfile
 
 
-API_URL = "http://localhost:8000/inference"
+API_URL = os.environ.get("API_URL", "http://localhost:8000")
 
 def process_image(image):
     try:
@@ -17,7 +17,7 @@ def process_image(image):
         img_byte_arr = img_byte_arr.getvalue()
         
         files = {'image': ('image.png', img_byte_arr, 'image/png')}
-        response = requests.post(API_URL, files=files)
+        response = requests.post(f"{API_URL}/inference", files=files)
         
         if response.status_code != 200:
             return image, f"Error: {response.text}"
@@ -27,11 +27,10 @@ def process_image(image):
         draw_image = image.copy()
         draw = ImageDraw.Draw(draw_image)
         
-        # Create a font object with larger size
         try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", 40)
+            font = ImageFont.truetype("fonts/font.ttf", 40)
         except:
-            font = ImageFont.load_default()  # Fallback to default font
+            font = ImageFont.load_default()
         
         for box, label, det_conf, cls_conf in zip(
             result['boxes'],
@@ -42,7 +41,6 @@ def process_image(image):
             x1, y1, x2, y2 = map(int, box)
             draw.rectangle([x1, y1, x2, y2], outline='red', width=3)
             label_text = f"{label}"
-            # Draw text with the larger font
             draw.text((x1, y1-40), label_text, fill='red', font=font)
         
         return draw_image, "Processing complete"
@@ -56,7 +54,7 @@ interface = gr.Interface(
         gr.Image(type="pil"),
         gr.Textbox()
     ],
-    title="FlyDetector",
+    title="FliesDetector",
     description="Upload an image (PNG or JPG) to classify flies. The app will return the image with bounding boxes and classification results.",
     examples=[],
     theme=gr.themes.Soft(),
